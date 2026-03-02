@@ -10,6 +10,7 @@ import torch
 from transformers import Trainer, TrainingArguments
 
 from config import parse_args
+from infer import load_checkpoint_state
 from data import G2PDataCollator, load_dataset_splits
 from evaluate import build_compute_metrics
 from model import HebrewG2PCTC
@@ -40,6 +41,8 @@ def main():
     collator = G2PDataCollator(encoder_pad_id=encoder_tokenizer.pad_token_id or 0)
 
     model = HebrewG2PCTC(upsample_factor=args.upsample_factor)
+    if args.init_from_checkpoint:
+        model.load_state_dict(load_checkpoint_state(args.init_from_checkpoint))
     if args.freeze_encoder_steps > 0:
         for p in model.encoder.parameters():
             p.requires_grad_(False)

@@ -29,5 +29,6 @@ def parse_args():
     parser.add_argument("--freeze-encoder-steps", type=int, default=0)
     parser.add_argument("--upsample-factor", type=int, default=2)
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
+    parser.add_argument("--init-from-checkpoint", type=str, default=None)
     parser.add_argument("--report-to", type=str, default="tensorboard")
     return parser.parse_args()

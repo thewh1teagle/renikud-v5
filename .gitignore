@@ -13,6 +13,7 @@ wheels/
 *.txt
 plans/overfit/dataset/
 dataset/
+dataset_finetune/
 checkpoint/
 checkpoints/
 outputs/

@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--gt", type=str, default="gt.tsv")
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--strip-punct", action="store_true", help="Strip trailing punctuation from predictions")
     args = parser.parse_args()
 
     if not Path(args.gt).exists():
@@ -64,6 +65,8 @@ def main():
             )
         input_length = int(out["input_lengths"][0])
         pred = decode_ctc(out["logits"][0].argmax(dim=-1)[:input_length].tolist())
+        if args.strip_punct:
+            pred = pred.rstrip(".")
 
         refs.append(item["phonemes"])
         hyps.append(pred)
@@ -79,6 +82,7 @@ def main():
     print(f"\nResults ({len(gt_data)} samples):")
     print(f"  CER: {jiwer.cer(refs, hyps):.4f}")
     print(f"  WER: {jiwer.wer(refs, hyps):.4f}")
+    print(f"  Acc: {1 - jiwer.wer(refs, hyps):.1%}")
 
 
 if __name__ == "__main__":
