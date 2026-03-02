@@ -2,13 +2,6 @@
 
 Hebrew grapheme-to-phoneme (G2P) training project for converting Hebrew text into IPA.
 
-## Setup
-
-```bash
-pnpm install
-uv sync
-```
-
 ## Data Preparation
 
 ```bash
