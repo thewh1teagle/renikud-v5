@@ -73,6 +73,12 @@ def main():
     entry.value = str(tokenizer.sep_token_id)
 
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
+
+    # torch.onnx.export creates a .data sidecar; remove it now that everything is inlined
+    data_file = Path(args.output + ".data")
+    if data_file.exists():
+        data_file.unlink()
+
     print(f"Exported to {args.output} ({Path(args.output).stat().st_size / 1e6:.1f} MB)")
 
 

@@ -16,6 +16,14 @@ uv run src/prepare_tokens.py --input dataset/val.txt --output dataset/.cache/val
 uv run src/train.py --train-dataset dataset/.cache/train --eval-dataset dataset/.cache/val --output-dir outputs/g2p-ctc
 ```
 
+## Inference
+
+See `renikud-onnx/` for the ONNX runtime package. Export a trained checkpoint with:
+
+```console
+uv run renikud-onnx/scripts/export.py --checkpoint outputs/g2p-augmented/checkpoint-1500 --output model.onnx
+```
+
 ## Documentation
 
 See `docs/ARCHITECTURE.md`.
