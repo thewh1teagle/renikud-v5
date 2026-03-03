@@ -4,6 +4,12 @@ Hebrew grapheme-to-phoneme (G2P) training project for converting Hebrew text int
 
 Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
 
+## Architecture
+
+DictaBERT character-level encoder (300M params) → linear projection → 2× upsample + slot embedding → CTC head.
+
+Trained on 500K Hebrew sentences (knesset corpus, silver IPA labels from Phonikud), fine-tuned with mixed punct/no-punct augmentation for conditional punctuation behavior. Reaches **85.1% word accuracy** on [heb-g2p-benchmark](https://github.com/thewh1teagle/heb-g2p-benchmark).
+
 ## Data Preparation
 
 ```console
