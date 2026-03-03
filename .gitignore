@@ -21,3 +21,4 @@ outputs/
 *.onnx
 *.onnx.data
 dataset_*/
+*.env

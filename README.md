@@ -2,6 +2,8 @@
 
 Hebrew grapheme-to-phoneme (G2P) training project for converting Hebrew text into IPA.
 
+Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
+
 ## Data Preparation
 
 ```console
