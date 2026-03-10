@@ -48,11 +48,14 @@ def save_checkpoint(model: torch.nn.Module, output_dir: Path, global_step: int, 
 def evaluate(model: torch.nn.Module, eval_loader: DataLoader, device: torch.device, fp16: bool) -> dict:
     model.eval()
     all_logits, all_lengths, all_labels = [], [], []
+    total_loss, n_batches = 0.0, 0
     with torch.no_grad():
         for batch in eval_loader:
             batch = {k: v.to(device) for k, v in batch.items()}
             with torch.autocast("cuda", enabled=fp16):
-                out = model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
+                out = model(**batch)
+            total_loss += out["loss"].item()
+            n_batches += 1
             all_logits.append(out["logits"].float().cpu().numpy())
             all_lengths.append(out["input_lengths"].cpu().numpy())
             all_labels.append(batch["labels"].cpu().numpy())
@@ -70,7 +73,7 @@ def evaluate(model: torch.nn.Module, eval_loader: DataLoader, device: torch.devi
         axis=0,
     )
 
-    return compute_metrics(logits, lengths, labels)
+    return {**compute_metrics(logits, lengths, labels), "eval_loss": total_loss / n_batches}
 
 
 def main():
@@ -143,8 +146,9 @@ def main():
                 opt_step += 1
 
                 if opt_step % args.logging_steps == 0:
+                    print(f"[step {opt_step}] train_loss={accum_loss:.4f} lr_encoder={optimizer.param_groups[0]['lr']:.2e} lr_head={optimizer.param_groups[2]['lr']:.2e}")
                     wandb.log({
-                        "loss": accum_loss,
+                        "train_loss": accum_loss,
                         "lr_encoder": optimizer.param_groups[0]["lr"],
                         "lr_head": optimizer.param_groups[2]["lr"],
                         "epoch": epoch,
@@ -154,13 +158,13 @@ def main():
                 if opt_step % args.save_steps == 0:
                     metrics = evaluate(model, eval_loader, device, args.fp16)
                     wandb.log(metrics, step=opt_step)
-                    print(f"[step {opt_step}] cer={metrics['cer']:.4f} wer={metrics['wer']:.4f}")
+                    print(f"[step {opt_step}] eval_cer={metrics['cer']:.4f} eval_wer={metrics['wer']:.4f} eval_loss={metrics['eval_loss']:.4f}")
                     save_checkpoint(model, output_dir, opt_step, metrics["cer"], args.save_total_limit)
 
     # Final eval + save
     metrics = evaluate(model, eval_loader, device, args.fp16)
     wandb.log(metrics)
-    print(f"Final: cer={metrics['cer']:.4f} wer={metrics['wer']:.4f}")
+    print(f"Final: eval_cer={metrics['cer']:.4f} eval_wer={metrics['wer']:.4f} eval_loss={metrics['eval_loss']:.4f}")
     save_checkpoint(model, output_dir, opt_step, metrics["cer"], args.save_total_limit)
     wandb.finish()
 
