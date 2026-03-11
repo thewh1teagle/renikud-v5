@@ -3,15 +3,18 @@ Export HebrewG2PCTC to a self-contained ONNX file with vocab metadata embedded.
 
 Usage:
     uv run scripts/export.py --checkpoint ../outputs/g2p-augmented/checkpoint-1500 --output model.onnx
+    uv run scripts/export.py --checkpoint ../outputs/g2p-augmented/checkpoint-1500 --output model.onnx --int8
 """
 
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import onnx
 import torch
+from onnxruntime.quantization import QuantType, quantize_dynamic
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from constants import ID_TO_TOKEN
@@ -24,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", default="model.onnx")
+    parser.add_argument("--int8", action="store_true", help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
     args = parser.parse_args()
 
     tokenizer = load_encoder_tokenizer()
@@ -31,15 +35,25 @@ def main():
 
     model = HebrewG2PCTC()
     model.load_state_dict(load_checkpoint_state(args.checkpoint))
-    model.half().eval()  # fp16 keeps model under 2GB protobuf limit → single .onnx file
+    if args.int8:
+        model.float().eval()  # quantization tools require FP32 input
+    else:
+        model.half().eval()  # fp16 keeps model under 2GB protobuf limit → single .onnx file
 
     dummy_ids = torch.zeros(1, 16, dtype=torch.long)
     dummy_mask = torch.ones(1, 16, dtype=torch.long)
 
+    # For INT8 we export FP32 to a temp file, quantize, then embed metadata
+    export_path = args.output
+    if args.int8:
+        tmp = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False)
+        export_path = tmp.name
+        tmp.close()
+
     torch.onnx.export(
         model,
         (dummy_ids, dummy_mask),
-        args.output,
+        export_path,
         input_names=["input_ids", "attention_mask"],
         output_names=["logits", "input_lengths"],
         dynamic_axes={
@@ -50,6 +64,12 @@ def main():
         },
         opset_version=17,
     )
+
+    if args.int8:
+        quantize_dynamic(export_path, args.output, weight_type=QuantType.QInt8)
+        Path(export_path).unlink(missing_ok=True)
+        # quantize_dynamic may also produce a .onnx.data sidecar
+        Path(export_path + ".data").unlink(missing_ok=True)
 
     # Embed vocab metadata into the ONNX file
     # load_external_data=True merges the .data sidecar into memory
@@ -79,7 +99,8 @@ def main():
     if data_file.exists():
         data_file.unlink()
 
-    print(f"Exported to {args.output} ({Path(args.output).stat().st_size / 1e6:.1f} MB)")
+    quant_label = " (int8)" if args.int8 else " (fp16)"
+    print(f"Exported to {args.output}{quant_label} ({Path(args.output).stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":
