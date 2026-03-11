@@ -26,6 +26,7 @@ class HebrewG2PCTC(nn.Module):
         projection_dim: int = PROJECTION_DIM,
         upsample_factor: int = UPSAMPLE_FACTOR,
         vocab_size: int = len(DECODER_VOCAB),
+        dropout_rate: float = 0.1,
     ) -> None:
         super().__init__()
         if upsample_factor < 1:
@@ -41,6 +42,9 @@ class HebrewG2PCTC(nn.Module):
         hidden_size = self.encoder.config.hidden_size
         self.projection = nn.Linear(hidden_size, projection_dim)
         self.slot_embedding = nn.Embedding(upsample_factor, projection_dim)
+        self.activation = nn.GELU()
+        self.layer_norm = nn.LayerNorm(projection_dim)
+        self.dropout = nn.Dropout(dropout_rate)
         self.classifier = nn.Linear(projection_dim, vocab_size)
 
     def forward(
@@ -66,6 +70,10 @@ class HebrewG2PCTC(nn.Module):
         else:
             expanded_mask = attention_mask
 
+        hidden_states = self.activation(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+
         logits = self.classifier(hidden_states)
         output = {"logits": logits, "input_lengths": expanded_mask.sum(dim=1).to(dtype=torch.long)}
 
@@ -76,29 +84,37 @@ class HebrewG2PCTC(nn.Module):
 
     def parameter_groups(self, encoder_lr: float, head_lr: float, weight_decay: float) -> list[dict]:
         """Return AdamW parameter groups with discriminative LRs and correct weight decay."""
-        no_decay = {"bias", "LayerNorm.weight"}
+        no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight", "rms_norm.weight"}
+
+        def is_no_decay(name: str) -> bool:
+            return any(term in name for term in no_decay)
+
         return [
             {
-                "params": [p for n, p in self.encoder.named_parameters() if not any(nd in n for nd in no_decay)],
+                "params": [p for n, p in self.encoder.named_parameters() if not is_no_decay(n)],
                 "lr": encoder_lr,
                 "weight_decay": weight_decay,
             },
             {
-                "params": [p for n, p in self.encoder.named_parameters() if any(nd in n for nd in no_decay)],
+                "params": [p for n, p in self.encoder.named_parameters() if is_no_decay(n)],
                 "lr": encoder_lr,
                 "weight_decay": 0.0,
             },
             {
-                "params": [p for n, p in self.projection.named_parameters() if not any(nd in n for nd in no_decay)]
-                        + [p for n, p in self.slot_embedding.named_parameters() if not any(nd in n for nd in no_decay)]
-                        + [p for n, p in self.classifier.named_parameters() if not any(nd in n for nd in no_decay)],
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if not n.startswith("encoder.") and not is_no_decay(n)
+                ],
                 "lr": head_lr,
                 "weight_decay": weight_decay,
             },
             {
-                "params": [p for n, p in self.projection.named_parameters() if any(nd in n for nd in no_decay)]
-                        + [p for n, p in self.slot_embedding.named_parameters() if any(nd in n for nd in no_decay)]
-                        + [p for n, p in self.classifier.named_parameters() if any(nd in n for nd in no_decay)],
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if not n.startswith("encoder.") and is_no_decay(n)
+                ],
                 "lr": head_lr,
                 "weight_decay": 0.0,
             },

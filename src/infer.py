@@ -12,6 +12,8 @@ from constants import MAX_LEN
 from model import HebrewG2PCTC
 from tokenization import beam_search_ctc, decode_ctc, load_encoder_tokenizer
 
+ALLOWED_MISSING_CHECKPOINT_KEYS = {"layer_norm.weight", "layer_norm.bias"}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Infer IPA from Hebrew text")
@@ -34,6 +36,27 @@ def load_checkpoint_state(checkpoint_dir: str) -> dict[str, torch.Tensor]:
     raise FileNotFoundError(f"No checkpoint weights found in {checkpoint_dir}")
 
 
+def load_checkpoint_into_model(model: HebrewG2PCTC, checkpoint_dir: str) -> None:
+    incompatible = model.load_state_dict(load_checkpoint_state(checkpoint_dir), strict=False)
+    missing_keys = set(incompatible.missing_keys)
+    unexpected_keys = set(incompatible.unexpected_keys)
+    disallowed_missing_keys = missing_keys - ALLOWED_MISSING_CHECKPOINT_KEYS
+
+    if disallowed_missing_keys or unexpected_keys:
+        details = []
+        if disallowed_missing_keys:
+            details.append(f"missing keys: {sorted(disallowed_missing_keys)}")
+        if unexpected_keys:
+            details.append(f"unexpected keys: {sorted(unexpected_keys)}")
+        raise RuntimeError(f"Checkpoint at {checkpoint_dir} is incompatible ({'; '.join(details)})")
+
+    if missing_keys:
+        print(
+            "Checkpoint is missing newly added parameters; using default initialization for "
+            f"{sorted(missing_keys)}"
+        )
+
+
 def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,7 +70,7 @@ def main():
     )
 
     model = HebrewG2PCTC()
-    model.load_state_dict(load_checkpoint_state(args.checkpoint))
+    load_checkpoint_into_model(model, args.checkpoint)
     model.to(device)
     model.eval()
 

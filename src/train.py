@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from config import parse_args
 from data import G2PDataCollator, load_dataset_splits
 from evaluate import compute_metrics
-from infer import load_checkpoint_state
+from infer import load_checkpoint_into_model
 from model import HebrewG2PCTC
 from tokenization import load_encoder_tokenizer
 
@@ -93,7 +93,7 @@ def main():
 
     model = HebrewG2PCTC(upsample_factor=args.upsample_factor).to(device)
     if args.init_from_checkpoint:
-        model.load_state_dict(load_checkpoint_state(args.init_from_checkpoint))
+        load_checkpoint_into_model(model, args.init_from_checkpoint)
         print(f"Loaded weights from {args.init_from_checkpoint}")
 
     if args.freeze_encoder_steps > 0:
