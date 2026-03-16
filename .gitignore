@@ -24,3 +24,7 @@ dataset_*/
 *.env
 target/
 wandb/
+model-he/
+*.npy
+*.wav
+*.tar.gz
