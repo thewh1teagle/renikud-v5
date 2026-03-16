@@ -1,69 +1,75 @@
-# renikud-v4
+# renikud-v5
 
-Hebrew grapheme-to-phoneme (G2P) training project for converting Hebrew text into IPA.
+Hebrew grapheme-to-phoneme (G2P) training project for converting unvocalized Hebrew text into IPA.
 
 Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
 
 ## Architecture
 
-DictaBERT character-level encoder (300M params) → linear projection → 2× upsample + slot embedding → CTC head.
+DictaBERT character-level encoder (300M params) → three linear heads (consonant, vowel, stress) per Hebrew letter.
 
-Trained on 500K Hebrew sentences (knesset corpus, silver IPA labels from Phonikud), fine-tuned with mixed punct/no-punct augmentation for conditional punctuation behavior. Reaches **85.1% word accuracy** on [heb-g2p-benchmark](https://github.com/thewh1teagle/heb-g2p-benchmark).
+Each Hebrew letter gets exactly one output slot predicting a (consonant, vowel, stress) triple. Trained on ~900K Hebrew sentences (vox-knesset corpus, silver IPA labels from Phonikud). Reaches **90.6% word accuracy** on [heb-g2p-benchmark](https://github.com/thewh1teagle/heb-g2p-benchmark), surpassing the Phonikud teacher (86.1%).
+
+See `docs/ARCHITECTURE.md` for full design details.
 
 ## Data Preparation
 
-### CTC model
-
 ```console
-uv run src/prepare_data.py --input knesset_phonemes_v1.txt --output-dir dataset
-uv run src/prepare_tokens.py --input dataset/train.txt --output dataset/.cache/train
-uv run src/prepare_tokens.py --input dataset/val.txt --output dataset/.cache/val
-```
-
-### Classifier model
-
-```console
-uv run src/prepare_data.py --input knesset_phonemes_v1.txt --output-dir dataset
-uv run src/align_data.py dataset/train.txt dataset/train_alignment.jsonl
-uv run src/align_data.py dataset/val.txt dataset/val_alignment.jsonl
-uv run src/prepare_classifier_tokens.py dataset/train_alignment.jsonl dataset/.cache/classifier-train
-uv run src/prepare_classifier_tokens.py dataset/val_alignment.jsonl dataset/.cache/classifier-val
+uv run src/align_data.py dataset/train.tsv dataset/train_alignment.jsonl
+uv run src/align_data.py dataset/val.tsv dataset/val_alignment.jsonl
+uv run src/prepare_tokens.py dataset/train_alignment.jsonl dataset/.cache/train
+uv run src/prepare_tokens.py dataset/val_alignment.jsonl dataset/.cache/val
 ```
 
 ## Training
 
-### CTC model
-
 ```console
-uv run src/train.py --train-dataset dataset/.cache/train --eval-dataset dataset/.cache/val --output-dir outputs/g2p-ctc
+uv run src/train.py \
+  --train-dataset dataset/.cache/train \
+  --eval-dataset dataset/.cache/val \
+  --output-dir outputs/g2p-classifier \
+  --encoder-lr 2e-6 \
+  --head-lr 1e-5
 ```
 
-### Classifier model
+See `docs/TRAINING.md` for full training instructions.
+
+## Benchmark
 
 ```console
-uv run src/train_classifier.py --train-dataset dataset/.cache/classifier-train --eval-dataset dataset/.cache/classifier-val --output-dir outputs/g2p-classifier
+wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv
+uv run scripts/benchmark.py --checkpoint outputs/g2p-classifier/checkpoint-1500
 ```
 
-## Inference
+## Inference (ONNX)
 
-See `renikud-onnx/` for the ONNX runtime package. Export a trained checkpoint with:
+Export a checkpoint to ONNX:
 
 ```console
-uv run renikud-onnx/scripts/export.py --checkpoint outputs/g2p-augmented/checkpoint-1500 --output model.onnx
+cd renikud-onnx
+uv run scripts/export.py --checkpoint ../outputs/g2p-classifier/checkpoint-1500 --output model.onnx
 ```
+
+Then use the Python package:
+
+```python
+from renikud_onnx import G2P
+
+g2p = G2P("model.onnx")
+print(g2p.phonemize("שלום עולם"))
+# → ʃalˈom ʔolˈam
+```
+
+Or the Rust crate — see `renikud-rs/`.
 
 ## Upload Checkpoint to HuggingFace
 
 ```console
-uv run hf upload thewh1teagle/renikud outputs/output3_clean_plus_13k_manual-from-best/checkpoint-3000 --include "model.safetensors" --include "trainer_state.json" --commit-message "add weights"
+uv run hf upload thewh1teagle/renikud outputs/g2p-classifier/checkpoint-1500 --include "model.safetensors" --commit-message "add weights"
 ```
 
-## Download checkpoint
+## Download Checkpoint
 
 ```console
-uv run hf download thewh1teagle/renikud checkpoint-3000/model.safetensors --local-dir .
+uv run hf download thewh1teagle/renikud model.safetensors --local-dir .
 ```
-
-## Documentation
-
-See `docs/ARCHITECTURE.md` and `docs/EVALUATION.md`.
