@@ -10,14 +10,44 @@ dependencies = [
     "regex>=2026.2.28",
     "tensorboard>=2.20.0",
     "setuptools<81",  # tensorboard needs pkg_resources, removed in setuptools 82
-    "torch>=2.10.0",
     "tqdm>=4.67.3",
-    "transformers[torch]>=5.2.0",
+    "transformers>=5.2.0",
     "huggingface-hub>=1.5.0",
     "wandb>=0.25.0",
 ]
 
-# CUDA Config
+# Pick one: uv sync --extra cpu | cu12 | cu13 (PyTorch optional-deps guide).
+[project.optional-dependencies]
+cpu = [
+    "torch>=2.9.1,<2.10",
+]
+cu12 = [
+    "torch>=2.9.1,<2.10",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+cu13 = [
+    "torch>=2.9.1,<2.10",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu12" },
+        { extra = "cu13" },
+    ],
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
@@ -26,11 +56,12 @@ explicit = true
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu12" },
+    { index = "pytorch-cu130", extra = "cu13" },
 ]
 
 [tool.uv.workspace]
 members = [
     "renikud-onnx",
 ]
-
