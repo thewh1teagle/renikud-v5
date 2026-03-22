@@ -24,7 +24,6 @@ from tqdm import tqdm
 
 from constants import IGNORE_INDEX
 from model import HebrewG2PClassifier
-# from tokenization import load_encoder_tokenizer # Unused in this script
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +48,7 @@ def parse_args():
     parser.add_argument("--gradient-accumulation-steps", type=int, default=1)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--freeze-encoder-steps", type=int, default=0)
-    parser.add_argument("--init-from-checkpoint", type=str, default="outputs/g2p-classifier_2/checkpoint-1299")
+    parser.add_argument("--init-from-checkpoint", type=str, default=None)
     parser.add_argument("--wandb-mode", type=str, default="offline", choices=["online", "offline", "disabled"])
     
     # FIXED: Added proper mixed precision choices instead of a boolean fp16 flag

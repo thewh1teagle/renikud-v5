@@ -47,7 +47,7 @@ def main():
         print("wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv")
         return
 
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = load_encoder_tokenizer()
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
